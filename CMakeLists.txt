@@ -73,7 +73,7 @@ add_library(bz2 ${LIBRARY_SRCS} ${LIBRARY_PUBLIC_HDRS} ${LIBRARY_PRIVATE_HDRS} $
 set_target_properties(bz2 PROPERTIES DEBUG_POSTFIX d)
 if(MSVC)
     target_compile_definitions(bz2 PRIVATE _CRT_SECURE_NO_WARNINGS WIN32 _FILE_OFFSET_BITS=64)
-    target_compile_options(bz2 PRIVATE -MD -nologo)
+    target_compile_options(bz2 PRIVATE -nologo)
 endif()
 if (ENABLE_PIC)
     set_target_properties(bz2 PROPERTIES POSITION_INDEPENDENT_CODE ON)
