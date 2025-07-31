@@ -35,24 +35,17 @@
  #
  # ***** END LICENSE BLOCK ***** */
 
-CMAKE_MINIMUM_REQUIRED( VERSION 3.0 )
+cmake_minimum_required(VERSION 3.0)
 
-PROJECT( BZIP2 LANGUAGES C CXX VERSION 1.0.5)
-option( BZIP2_BUILD_BZIP2 "Build bzip2${CMAKE_EXECUTABLE_SUFFIX} application" TRUE )
+project( BZIP2 LANGUAGES C VERSION 1.0.6)
 option( BZIP2_BUILD_RECOVER "Build bzip2recover${CMAKE_EXECUTABLE_SUFFIX} application" TRUE )
+option(BUILD_TESTS "${PROJECT_NAME} - Build tests" ON)
 
-IF( NOT BZIP2_BUILD_BZIP2 )
-	SET( EXCLUDE_BZIP2 EXCLUDE_FROM_ALL )
-ENDIF()
-IF( NOT BZIP2_BUILD_RECOVER )
-	SET( EXCLUDE_RECOVER EXCLUDE_FROM_ALL )
-ENDIF()
+if( NOT BZIP2_BUILD_RECOVER )
+	set( EXCLUDE_RECOVER EXCLUDE_FROM_ALL )
+endif()
 
-IF( MSVC )
-	ADD_DEFINITIONS( -D_CRT_SECURE_NO_WARNINGS )
-ENDIF( MSVC )
-
-SET( LIBRARY_SRCS
+set( LIBRARY_SRCS
 	blocksort.c
 	bzlib.c
 	compress.c
@@ -60,39 +53,78 @@ SET( LIBRARY_SRCS
 	decompress.c
 	huffman.c
 	randtable.c )
-SET( LIBRARY_PUBLIC_HDRS
+set( LIBRARY_PUBLIC_HDRS
 	bzlib.h )
-SET( LIBRARY_PRIVATE_HDRS
+set( LIBRARY_PRIVATE_HDRS
 	bzlib_private.h )
-SET( BZIP2_SRCS
+set( BZIP2_SRCS
 	bzip2.c )
-SET( RECOVER_SRCS
+set( RECOVER_SRCS
 	bzip2recover.c )
 
-SET( CMAKE_DEBUG_POSTFIX "d" )
-SET( CMAKE_MFC_FLAG 0 )
+set( CMAKE_MFC_FLAG 0 )
 
-IF( WIN32 AND BUILD_SHARED_LIBS)
-	SET( LIBRARY_WIN32_XTRAS 
+if( WIN32 AND BUILD_SHARED_LIBS)
+	set( LIBRARY_WIN32_XTRAS 
 		libbz2.def )
-ENDIF()
+endif()
 
-ADD_LIBRARY(bzip2 ${LIBRARY_SRCS} ${LIBRARY_PUBLIC_HDRS} ${LIBRARY_PRIVATE_HDRS} ${LIBRARY_WIN32_XTRAS})
-ADD_EXECUTABLE(bzip2app ${EXCLUDE_BZIP2} ${BZIP2_SRCS} )
-ADD_EXECUTABLE(bzip2recover ${EXCLUDE_RECOVER} ${RECOVER_SRCS} )
+add_library(bz2 ${LIBRARY_SRCS} ${LIBRARY_PUBLIC_HDRS} ${LIBRARY_PRIVATE_HDRS} ${LIBRARY_WIN32_XTRAS})
+set_target_properties(bz2 PROPERTIES DEBUG_POSTFIX d)
+if(MSVC)
+    target_compile_definitions(bz2 PRIVATE _CRT_SECURE_NO_WARNINGS WIN32 _FILE_OFFSET_BITS=64)
+    target_compile_options(bz2 PRIVATE -nologo)
+endif()
+if (ENABLE_PIC)
+    set_target_properties(bz2 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+endif()
 
-TARGET_LINK_LIBRARIES( bzip2app bzip2 )
-TARGET_LINK_LIBRARIES( bzip2recover bzip2 )
+# For intel we need to link against the irc support library
+# Dont know why it's not linked automatically as it's a compiler aux library
+# See https://software.intel.com/de-de/articles/unresolved-external-symbol-_intel_fast_memcpy
+if (CMAKE_C_COMPILER_ID STREQUAL Intel)
+    target_link_libraries(bz2 INTERFACE irc)
+endif()
+add_executable(bzip2 ${EXCLUDE_BZIP2} ${BZIP2_SRCS})
+add_executable(bzip2recover ${EXCLUDE_RECOVER} ${RECOVER_SRCS} )
 
-IF( WIN32 AND NOT BZIP2_BUILD_STATIC_LIB )
-	SET_TARGET_PROPERTIES(bzip2 PROPERTIES IMPORT_SUFFIX _dll.lib)
-ENDIF()
+target_link_libraries(bzip2 bz2)
+target_link_libraries(bzip2recover bz2)
 
-INSTALL( TARGETS bzip2 EXPORT bzip2-config
+if(WIN32 AND BUILD_SHARED_LIBS)
+	set_target_properties(bzip2 PROPERTIES IMPORT_SUFFIX _dll.lib)
+endif()
+
+if (BUILD_TESTS)
+    if (UNIX)
+        enable_testing()
+        file(GLOB SAMPLE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/sample*)
+        file(COPY ${SAMPLE_FILES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+        MACRO(ADDTEST NAME ARGS INFILE TARGET)
+            add_test(${NAME} ${CMAKE_COMMAND}
+                    -DCMD=${CMAKE_CURRENT_BINARY_DIR}/bzip2${CMAKE_EXECUTABLE_SUFFIX}
+                    -DARGS=${ARGS}
+                    -DINFILE=${CMAKE_CURRENT_SOURCE_DIR}/${INFILE}
+                    -DTARGET=${CMAKE_CURRENT_SOURCE_DIR}/${TARGET}
+                    -P ${CMAKE_CURRENT_SOURCE_DIR}/testhelper.cmake)
+        ENDMACRO()
+        ADDTEST(compression_level1 -1 sample1.ref sample1.bz2)
+        ADDTEST(compression_level2 -2 sample2.ref sample2.bz2)
+        ADDTEST(compression_level3 -3 sample3.ref sample3.bz2)
+        ADDTEST(decompression_level1 -d sample1.bz2 sample1.ref)
+        ADDTEST(decompression_level2 -d sample2.bz2 sample2.ref)
+        ADDTEST(decompression_level3 -ds sample3.bz2 sample3.ref)
+    else()
+        message(WARNING "Tests not implemented on non-unix platforms")
+    endif()
+endif()
+
+install(TARGETS bz2 EXPORT bzip2-config
 	DESTINATION lib
 	INCLUDES DESTINATION include )
-INSTALL( FILES ${LIBRARY_PUBLIC_HDRS}
-	DESTINATION include )
+install(TARGETS bzip2 EXPORT bzip2-config
+	DESTINATION bin)
+install( FILES ${LIBRARY_PUBLIC_HDRS} DESTINATION include )
 install(EXPORT bzip2-config DESTINATION ${PACKAGE_CONFIG_DIR})   
 include(CMakePackageConfigHelpers)
 WRITE_BASIC_PACKAGE_VERSION_FILE(${CMAKE_CURRENT_BINARY_DIR}/bzip2-config-version.cmake
