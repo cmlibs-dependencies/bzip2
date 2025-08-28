@@ -35,7 +35,7 @@
  #
  # ***** END LICENSE BLOCK ***** */
 
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.18)
 
 project( BZIP2 LANGUAGES C VERSION 1.0.6)
 option( BZIP2_BUILD_RECOVER "Build bzip2recover${CMAKE_EXECUTABLE_SUFFIX} application" TRUE )
